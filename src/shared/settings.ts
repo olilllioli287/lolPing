@@ -3,7 +3,7 @@ import {
   CUSTOM_NAME_MAX, MAX_CUSTOM_EMOTES, customHash, isCustomRef, isEmoteFx, normalizeClickEmote, normalizeEmoteWheel,
   type CustomEmote, type EmoteRef,
 } from './emotes';
-import { DEFAULT_FEATURES, normalizeFeatures, type Features } from './features';
+import { DEFAULT_FEATURES, featureOn, normalizeFeatures, type Features } from './features';
 import { WHEEL } from './geometry';
 import { LANGUAGE_PREFS, strings, type Lang, type LanguagePref } from './i18n';
 import { HOTKEY_PRIMARY_MODS, MOD, type Hotkey, vkLabel } from './keys';
@@ -184,6 +184,10 @@ const trigger = (raw: unknown, platform: Platform): TriggerKey => triggerKey(raw
 /** The emote key as stored, before the clash rules: 'off', or a trigger key with Ctrl as the fallback. */
 const emoteKey = (raw: unknown, platform: Platform): EmoteTriggerKey => (raw === 'off' ? 'off' : triggerKey(raw, platform, 'ctrl'));
 
+/** The emote key the clash rules see: 'off' while the emotes feature is off, so a hidden emote key blocks nothing. */
+const liveEmoteKey = (raw: unknown, features: unknown, platform: Platform): EmoteTriggerKey =>
+  (featureOn({ features: normalizeFeatures(features) }, 'emotes') ? emoteKey(raw, platform) : 'off');
+
 /** The Caps Lock key's code: the named 'capslock' trigger and a custom { vk: 0x14 } are one physical key. */
 const CAPS_LOCK_VK = 0x14;
 /** The key code a trigger stands for when it is a custom key or Caps Lock; null for every other trigger. */
@@ -209,7 +213,7 @@ const pickKey = <K extends keyof Settings>(current: Settings, patch: Partial<Set
 function panelKeyTaken(current: Settings, patch: Partial<Settings>, platform: Platform): boolean {
   const pick = <K extends keyof Settings>(k: K): unknown => pickKey(current, patch, k);
   const ping = trigger(pick('trigger'), platform);
-  const emote = emoteKey(pick('emoteTrigger'), platform);
+  const emote = liveEmoteKey(pick('emoteTrigger'), pick('features'), platform);
   const taken = [
     triggerVk(ping), triggerVk(emote), hotkey(pick('toggleHotkey')).vk, hotkey(pick('textHotkey'), DEFAULT_SETTINGS.textHotkey).vk,
   ];
@@ -227,9 +231,9 @@ export function panelKeyClashes(current: Settings, patch: Partial<Settings>, pla
 
 /** Whether applying `patch` to `current` leaves those keys clashing, judged as normalizeSettings will read them. */
 export function patchClashes(current: Settings, patch: Partial<Settings>, platform: Platform = 'win'): boolean {
-  const pick = <K extends 'trigger' | 'emoteTrigger' | 'toggleHotkey' | 'textHotkey'>(k: K): unknown => pickKey(current, patch, k);
+  const pick = <K extends 'trigger' | 'emoteTrigger' | 'toggleHotkey' | 'textHotkey' | 'features'>(k: K): unknown => pickKey(current, patch, k);
   const ping = trigger(pick('trigger'), platform);
-  const emote = emoteKey(pick('emoteTrigger'), platform);
+  const emote = liveEmoteKey(pick('emoteTrigger'), pick('features'), platform);
   if (triggersClash(ping, emote, hotkey(pick('toggleHotkey')))) return true;
   if (panelKeyClashes(current, patch, platform)) return true;
   // A custom ping or emote key is swallowed by the helper, so the text key can't share it. Judged only when the patch
@@ -309,7 +313,9 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     ? { ...(hotkeysEqual(toggleHotkey, DEFAULT_SETTINGS.allMissingHotkey) ? ALL_MISSING_HOTKEY_FALLBACK : DEFAULT_SETTINGS.allMissingHotkey) }
     : requestedAllMissing;
   const emote = emoteKey(r.emoteTrigger, platform);
-  const emoteVk = triggerVk(triggersClash(pingTrigger, emote, toggleHotkey) ? 'off' : emote);
+  const emoteLive = liveEmoteKey(r.emoteTrigger, r.features, platform) !== 'off';
+  const emoteClashes = emoteLive && triggersClash(pingTrigger, emote, toggleHotkey);
+  const emoteVk = emoteLive && !emoteClashes ? triggerVk(emote) : null;
   const custom = customEmotes(r.customEmotes);
   return {
     version: 1,
@@ -342,7 +348,7 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     rejoinRoom: bool(r.rejoinRoom, 'rejoinRoom'),
     lastRoomCode: roomCode(r.lastRoomCode),
     roomMuted: bool(r.roomMuted, 'roomMuted'),
-    emoteTrigger: triggersClash(pingTrigger, emote, toggleHotkey) ? 'off' : emote,
+    emoteTrigger: emoteClashes ? 'off' : emote,
     emoteClick: bool(r.emoteClick, 'emoteClick'),
     emoteWheel: normalizeEmoteWheel(r.emoteWheel, custom),
     clickEmoteId: normalizeClickEmote(r.clickEmoteId, custom),
