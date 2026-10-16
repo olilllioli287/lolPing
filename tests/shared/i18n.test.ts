@@ -6,7 +6,9 @@ import { normalizeSettings, triggerLabel } from '../../src/shared/settings';
 describe('language', () => {
   it('follows the Windows display language when set to auto', () => {
     expect(resolveLang('auto', 'zh-CN')).toBe('zh-CN');
-    expect(resolveLang('auto', 'zh-TW')).toBe('zh-CN');
+    expect(resolveLang('auto', 'zh-TW')).toBe('zh-TW');
+    expect(resolveLang('auto', 'zh-Hant-TW')).toBe('zh-TW');
+    expect(resolveLang('auto', 'zh-HK')).toBe('zh-TW');
     expect(resolveLang('auto', 'en-US')).toBe('en');
     expect(resolveLang('auto', 'de')).toBe('en');
   });

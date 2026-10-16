@@ -91,7 +91,7 @@ export function allEmoteAssetFiles(): string[] {
 
 export function emoteName(ref: EmoteRef, lang: Lang, custom: readonly CustomEmote[]): string {
   const bundled = catalogEmote(ref);
-  if (bundled) return lang === 'zh-CN' ? bundled.nameZh : bundled.name;
+  if (bundled) return lang === 'en' ? bundled.name : bundled.nameZh;
   return custom.find((c) => c.id === ref)?.name ?? '?';
 }
 

@@ -90,7 +90,18 @@ export function registerSettingsIpc(d: SettingsIpcDeps): void {
       if (sameHotkey(patch.toggleHotkey, patch.textHotkey ?? d.store.get().textHotkey)) {
         return { ok: false, error: d.text().shortcutClash, settings: d.store.get() };
       }
+      if (sameHotkey(patch.toggleHotkey, patch.allMissingHotkey ?? d.store.get().allMissingHotkey)) {
+        return { ok: false, error: d.text().allMissingClash, settings: d.store.get() };
+      }
       const error = hotkeyConflict(patch.toggleHotkey, d.store.get().toggleHotkey, d.text(), d.platform);
+      if (error) return { ok: false, error, settings: d.store.get() };
+    }
+    if (patch.allMissingHotkey) {
+      const others = [patch.toggleHotkey ?? d.store.get().toggleHotkey, patch.textHotkey ?? d.store.get().textHotkey];
+      if (others.some((h) => sameHotkey(patch.allMissingHotkey as Hotkey, h))) {
+        return { ok: false, error: d.text().allMissingClash, settings: d.store.get() };
+      }
+      const error = hotkeyConflict(patch.allMissingHotkey, d.store.get().allMissingHotkey, d.text(), d.platform);
       if (error) return { ok: false, error, settings: d.store.get() };
     }
     if (patch.textHotkey) {

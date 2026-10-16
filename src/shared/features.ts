@@ -12,17 +12,11 @@ export const FEATURES: readonly { id: FeatureId; requires?: FeatureId }[] = [
   { id: 'roomPanel', requires: 'rooms' },
 ];
 
-export const DEFAULT_FEATURES: Features = { emotes: true, rooms: true, roomText: true, roomVotes: true, roomPanel: true };
+/** This build keeps only the ping wheel: emotes and rooms are always off, whatever the settings file says. */
+export const DEFAULT_FEATURES: Features = { emotes: false, rooms: false, roomText: false, roomVotes: false, roomPanel: false };
 
-/** Turns anything into a full Features object: a missing or non-boolean key falls back to on, unknown keys are dropped. */
-export function normalizeFeatures(raw: unknown): Features {
-  const r = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const out = { ...DEFAULT_FEATURES };
-  for (const { id } of FEATURES) {
-    const v = r[id];
-    if (typeof v === 'boolean') out[id] = v;
-  }
-  return out;
+export function normalizeFeatures(_raw: unknown): Features {
+  return { ...DEFAULT_FEATURES };
 }
 
 /** The room features this setup has switched off, as a room presence announces them. */

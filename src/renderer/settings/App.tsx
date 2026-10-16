@@ -1,8 +1,8 @@
 import { Dropdown, FluentProvider, Option, webDarkTheme, webLightTheme } from '@fluentui/react-components';
 import {
   ArrowMove24Regular, ArrowSync24Regular, CursorClick24Regular, DataPie24Regular, Games24Regular, Info24Regular, Keyboard24Regular, MusicNote224Regular, Pin24Regular,
-  Power24Regular, ResizeLarge24Regular, Rocket24Regular, Settings24Regular, Speaker224Regular, SpeakerMute24Regular,
-  Apps24Regular, Timer24Regular, Cursor24Regular, Emoji24Regular, LocalLanguage24Regular, PeopleCommunity24Regular,
+  Power24Regular, Question24Regular, ResizeLarge24Regular, Rocket24Regular, Settings24Regular, Speaker224Regular, SpeakerMute24Regular,
+  Timer24Regular, Cursor24Regular, Emoji24Regular, LocalLanguage24Regular, PeopleCommunity24Regular,
 } from '@fluentui/react-icons';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGE_NAMES, LANGUAGE_PREFS, resolveLang, strings, type LanguagePref, type Strings } from '../../shared/i18n';
@@ -15,7 +15,6 @@ import type { WheelPatch } from '../../shared/wheelLayout';
 import { api } from './api';
 import { AboutSection } from './components/AboutSection';
 import { EmoteSection } from './components/EmoteSection';
-import { FeaturesSection } from './components/FeaturesSection';
 import { KeyCapture } from './components/KeyCapture';
 import { PermissionCard } from './components/PermissionCard';
 import { RoomSection } from './components/RoomSection';
@@ -38,9 +37,9 @@ const SECTIONS: { id: string; label: (t: Strings) => string; icon: ReactNode; fe
   { id: 'toggle', label: (t) => t.navToggle, icon: <Keyboard24Regular /> },
   { id: 'pings', label: (t) => t.navPings, icon: <Speaker224Regular /> },
   { id: 'wheel', label: (t) => t.navWheel, icon: <DataPie24Regular /> },
+  { id: 'allMissing', label: (t) => t.navAllMissing, icon: <Question24Regular /> },
   { id: 'emotes', label: (t) => t.navEmotes, icon: <Emoji24Regular />, feature: 'emotes' },
   { id: 'room', label: (t) => t.navRoom, icon: <PeopleCommunity24Regular />, feature: 'rooms' },
-  { id: 'features', label: (t) => t.navFeatures, icon: <Apps24Regular /> },
   { id: 'app', label: (t) => t.navApp, icon: <Settings24Regular /> },
 ];
 
@@ -97,6 +96,7 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
   const off = !status.enabled || status.helper === 'failed';
   const trigger = triggerLabel(s.trigger, t.lang, PLATFORM);
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  const [allMissingError, setAllMissingError] = useState<string | null>(null);
   const mouseTrigger = s.trigger === 'mouse4' || s.trigger === 'mouse5';
   const customTrigger = typeof s.trigger === 'object';
   const pingPool: PoolItem<PingId>[] = ALL_PINGS.map((p) => ({
@@ -155,7 +155,7 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
               {customTrigger ? <span className="desc">{t.customKeyNote}</span> : null}
             </>
           )}>
-          <TriggerPicker value={s.trigger} blocked={s.emoteTrigger}
+          <TriggerPicker value={s.trigger} blocked={featureOn(s, 'emotes') ? s.emoteTrigger : undefined}
             onChange={(k) => { if (k !== 'off') void update({ trigger: k }); }} />
         </SettingRow>
         <SliderRow limit="dragThresholdPx" icon={<ArrowMove24Regular />} title={t.dragDistance} description={t.dragDistanceDesc}
@@ -205,6 +205,21 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
           labels={{ title: t.wheelTitle, desc: t.wheelDesc(trigger), poolTitle: t.allPings, poolDesc: t.allPingsDesc }}
           onChange={(patch) => void update(pingPatch(patch))} onPreview={(id) => void api.previewPing(id)} />
 
+        <div className="section" id="allMissing">{t.navAllMissing}</div>
+        <SwitchRow icon={<Question24Regular />} title={t.allMissing} description={t.allMissingDesc}
+          checked={s.allMissing} onChange={(v) => void update({ allMissing: v })} />
+        <SettingRow icon={<Keyboard24Regular />} title={t.allMissingHotkey} description={t.allMissingHotkeyDesc}>
+          <KeyCapture
+            parts={hotkeyParts(s.allMissingHotkey, PLATFORM)}
+            requireModifier
+            error={allMissingError}
+            onCapture={async (c) => {
+              const result = await update({ allMissingHotkey: c });
+              setAllMissingError(result.ok ? null : result.error);
+            }}
+          />
+        </SettingRow>
+
         {featureOn(s, 'emotes') ? (
           <>
             <div className="section" id="emotes">{t.navEmotes}</div>
@@ -218,9 +233,6 @@ function SettingsPage({ settings: s, status, update }: { settings: Settings; sta
             <RoomSection settings={s} update={update} />
           </>
         ) : null}
-
-        <div className="section" id="features">{t.navFeatures}</div>
-        <FeaturesSection settings={s} update={update} />
 
         <div className="section" id="app">{t.navApp}</div>
         <SwitchRow icon={<Rocket24Regular />} title={t.launchAtStartup} description={t.launchAtStartupDesc}

@@ -42,6 +42,10 @@ export interface Settings {
   /** The wheel's slices, top (N) then clockwise. */
   wheel: PingId[];
   toggleHotkey: Hotkey;
+  /** 全問號: every wheel slice and the click ping place the Enemy Missing ping. */
+  allMissing: boolean;
+  /** Turns 全問號 on and off, from anywhere (an Electron global shortcut, not the helper). */
+  allMissingHotkey: Hotkey;
   /** Opens the custom text message dialog. */
   textHotkey: Hotkey;
   /** Held in a room to show the room panel: one key's virtual-key code, no modifiers. */
@@ -108,6 +112,8 @@ export const DEFAULT_SETTINGS: Settings = {
   wheelSizePx: WHEEL.size,
   wheel: [...DEFAULT_WHEEL],
   toggleHotkey: { mods: MOD.ctrl | MOD.alt, vk: 0x50 },
+  allMissing: false,
+  allMissingHotkey: { mods: MOD.ctrl | MOD.alt | MOD.shift, vk: 0xbf }, // ⌃⌥⇧/, that is ⌃⌥? (⌃⌥/ itself is often taken)
   textHotkey: { mods: MOD.alt, vk: 0x54 },
   panelKey: 0x09,
   pingSizePx: 110,
@@ -151,7 +157,7 @@ export const LIMITS = {
 } as const;
 
 type NumKey = keyof typeof LIMITS;
-type BoolKey = 'enabledOnStart' | 'clickPing' | 'gameCheck' | 'keepLastPing' | 'muted' | 'tickSound' | 'launchAtStartup' | 'allowInternet' | 'rejoinRoom' | 'roomMuted'
+type BoolKey = 'enabledOnStart' | 'allMissing' | 'clickPing' | 'gameCheck' | 'keepLastPing' | 'muted' | 'tickSound' | 'launchAtStartup' | 'allowInternet' | 'rejoinRoom' | 'roomMuted'
   | 'emoteClick' | 'emoteSound' | 'friendEmotes' | 'autoUpdateCheck';
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -258,6 +264,7 @@ function panelKey(raw: unknown, taken: readonly (number | null)[]): number {
 }
 
 const TEXT_HOTKEY_FALLBACK: Hotkey = { mods: MOD.alt, vk: 0x59 }; // Alt+Y when Alt+T is taken
+const ALL_MISSING_HOTKEY_FALLBACK: Hotkey = { mods: MOD.ctrl | MOD.win, vk: 0xbf }; // ⌃⌘/ when ⌃⌥? is the pause shortcut
 
 function roomCode(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
@@ -297,6 +304,10 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
   const textHotkey = hotkeysEqual(toggleHotkey, requestedTextHotkey)
     ? { ...(hotkeysEqual(toggleHotkey, DEFAULT_SETTINGS.textHotkey) ? TEXT_HOTKEY_FALLBACK : DEFAULT_SETTINGS.textHotkey) }
     : requestedTextHotkey;
+  const requestedAllMissing = hotkey(r.allMissingHotkey, DEFAULT_SETTINGS.allMissingHotkey);
+  const allMissingHotkey = hotkeysEqual(toggleHotkey, requestedAllMissing) || hotkeysEqual(textHotkey, requestedAllMissing)
+    ? { ...(hotkeysEqual(toggleHotkey, DEFAULT_SETTINGS.allMissingHotkey) ? ALL_MISSING_HOTKEY_FALLBACK : DEFAULT_SETTINGS.allMissingHotkey) }
+    : requestedAllMissing;
   const emote = emoteKey(r.emoteTrigger, platform);
   const emoteVk = triggerVk(triggersClash(pingTrigger, emote, toggleHotkey) ? 'off' : emote);
   const custom = customEmotes(r.customEmotes);
@@ -311,6 +322,8 @@ export function normalizeSettings(raw: unknown, platform: Platform = 'win', iden
     clickPingId: isPingId(r.clickPingId) ? r.clickPingId : DEFAULT_CLICK_PING,
     wheel: isValidWheel(r.wheel) ? [...r.wheel] : [...DEFAULT_WHEEL],
     toggleHotkey,
+    allMissing: bool(r.allMissing, 'allMissing'),
+    allMissingHotkey,
     textHotkey,
     panelKey: panelKey(r.panelKey, [triggerVk(pingTrigger), emoteVk, toggleHotkey.vk, textHotkey.vk]),
     pingSizePx: num(r.pingSizePx, 'pingSizePx'),
@@ -381,9 +394,12 @@ export type OverlaySettings = Pick<
 /** How loud lolPing's sounds play, 0 to 1: the volume setting, or 0 when muted. */
 export const soundLevel = (s: Pick<Settings, 'volume' | 'muted'>): number => (s.muted ? 0 : s.volume / 100);
 
+/** 全問號 swaps every slice and the click ping for Enemy Missing on screen only; the saved wheel stays as it was. */
 export const overlaySettings = (s: Settings): OverlaySettings => ({
   pingSizePx: s.pingSizePx, pingDurationS: s.pingDurationS, keepLastPing: s.keepLastPing, volume: s.volume, muted: s.muted, tickSound: s.tickSound,
-  wheelSizePx: s.wheelSizePx, wheel: [...s.wheel], clickPingId: s.clickPingId,
+  wheelSizePx: s.wheelSizePx,
+  wheel: s.allMissing ? s.wheel.map((): PingId => 'missing') : [...s.wheel],
+  clickPingId: s.allMissing ? 'missing' : s.clickPingId,
   emoteWheel: [...s.emoteWheel], clickEmoteId: s.clickEmoteId, emoteSizePx: s.emoteSizePx, emoteSound: s.emoteSound,
   customEmotes: s.customEmotes.map((c) => ({ ...c })),
 });

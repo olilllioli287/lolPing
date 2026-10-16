@@ -1,4 +1,4 @@
-import { app, clipboard, dialog, Menu, powerMonitor, screen, shell, systemPreferences } from 'electron';
+import { app, clipboard, dialog, globalShortcut, Menu, powerMonitor, screen, shell, systemPreferences } from 'electron';
 import { randomBytes, randomInt } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
@@ -7,7 +7,7 @@ import { resolveLang, strings, type Strings } from '../shared/i18n';
 import { SETTINGS_CH, type About, type AppStatus, type PanelAction, type PanelState } from '../shared/ipc';
 import { announcedEmoteHashes } from '../shared/emotes';
 import { featureOn, liveKeys, roomFeaturesOff } from '../shared/features';
-import { hotkeyLabel } from '../shared/keys';
+import { hotkeyLabel, hotkeyToAccelerator, type Hotkey } from '../shared/keys';
 import { configCommand, type HelperStatus } from '../shared/protocol';
 import type { RoomState } from '../shared/room';
 import type { VoteKind } from '../shared/roomProtocol';
@@ -562,9 +562,33 @@ function start(): void {
   });
   bridge.on('log', (line: string) => console.log('[helper]', line));
 
+  // 全問號's shortcut is an Electron global shortcut, so the input helper doesn't need to know about it.
+  let allMissingAccel: string | null = null;
+  const registerAllMissing = (h: Hotkey): void => {
+    const next = hotkeyToAccelerator(h);
+    if (next === allMissingAccel) return;
+    if (allMissingAccel) globalShortcut.unregister(allMissingAccel);
+    allMissingAccel = null;
+    if (!next) return;
+    try {
+      const ok = globalShortcut.register(next, () => {
+        if (!capturing) store.update({ allMissing: !store.get().allMissing }); // not while the settings page records a key
+      });
+      if (ok) allMissingAccel = next;
+      else console.warn('[allMissing] shortcut is taken:', next);
+    } catch (err) {
+      console.warn('[allMissing]', err);
+    }
+  };
+  registerAllMissing(settings.allMissingHotkey);
+
   store.on('change', (s: Settings) => {
     const previous = settings;
     settings = s;
+    registerAllMissing(s.allMissingHotkey);
+    if (s.allMissing !== previous.allMissing) {
+      overlays.toast(text().toastAllMissing(s.allMissing), text().toastToggleHint(hotkeyLabel(s.allMissingHotkey, PLATFORM)));
+    }
     sendConfig();
     syncRoomText();
     syncRoomVotes();
@@ -674,6 +698,7 @@ function start(): void {
     room.quit(); // says bye, so the others see "left" instead of waiting for a timeout
     transfer.stop();
     stopWaitingForAccess();
+    globalShortcut.unregisterAll();
     tray.destroy();
     panels.destroy();
     overlays.destroy();
