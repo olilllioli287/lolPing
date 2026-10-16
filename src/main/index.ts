@@ -83,9 +83,12 @@ function relayUrls(): readonly string[] {
   return urls.length > 0 ? urls : RELAYS;
 }
 
-/** macOS: the app, Edit and Window menus, so Cmd+Q, Cmd+W and the clipboard shortcuts work in the settings window. */
+/**
+ * macOS: the app, File, Edit and Window menus, so Cmd+Q, Cmd+W and the clipboard shortcuts work in the settings window.
+ * Cmd+W needs the File menu: on macOS Electron's Window menu has no Close item.
+ */
 function setMacMenu(): void {
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]));
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'fileMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]));
 }
 
 function start(): void {
